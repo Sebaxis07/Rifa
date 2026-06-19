@@ -15,6 +15,20 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+// No bloquea si no hay token — solo decodifica si viene uno válido
+const optionalAuthMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    try {
+      req.user = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (_) {
+      // token inválido → ignorar, seguir sin usuario
+    }
+  }
+  next();
+};
+
 const adminMiddleware = (req, res, next) => {
   if (req.user?.rol !== 'admin') {
     return res.status(403).json({ message: 'Acceso solo para administradores' });
@@ -37,4 +51,4 @@ const permissionMiddleware = (permiso) => {
   };
 };
 
-module.exports = { authMiddleware, adminMiddleware, permissionMiddleware };
+module.exports = { authMiddleware, optionalAuthMiddleware, adminMiddleware, permissionMiddleware };

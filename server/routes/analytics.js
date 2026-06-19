@@ -3,10 +3,10 @@ const router  = express.Router();
 const Compra  = require('../models/Compra');
 const Rifa    = require('../models/Rifa');
 
-const { authMiddleware, permissionMiddleware } = require('../middleware/auth');
+const { optionalAuthMiddleware } = require('../middleware/auth');
 
-// GET /api/analytics/:rifaId
-router.get('/:rifaId', authMiddleware, permissionMiddleware('ver_analytics'), async (req, res) => {
+// GET /api/analytics/:rifaId — público (vista supervisor + admin con token)
+router.get('/:rifaId', optionalAuthMiddleware, async (req, res) => {
   try {
     const rifa = await Rifa.findById(req.params.rifaId);
     if (!rifa) return res.status(404).json({ message: 'Rifa no encontrada' });
