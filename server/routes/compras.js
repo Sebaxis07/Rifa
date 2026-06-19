@@ -17,7 +17,7 @@ router.get('/:rifaId', async (req, res) => {
 // POST /api/compras — solo admin
 router.post('/', authMiddleware, permissionMiddleware('registrar_compra'), async (req, res) => {
   try {
-    const { rifaId, comprador, numeros, nota } = req.body;
+    const { rifaId, comprador, numeros, nota, transferido } = req.body;
 
     if (!numeros || numeros.length === 0)
       return res.status(400).json({ message: 'Debes seleccionar al menos un número' });
@@ -33,7 +33,7 @@ router.post('/', authMiddleware, permissionMiddleware('registrar_compra'), async
     if (!rifa) return res.status(404).json({ message: 'Rifa no encontrada' });
 
     const montoTotal = numeros.length * rifa.precioPorNumero;
-    const compra = new Compra({ rifaId, comprador, numeros, montoTotal, nota });
+    const compra = new Compra({ rifaId, comprador, numeros, montoTotal, nota, transferido: !!transferido });
     const saved = await compra.save();
 
     // Emitir evento socket (el objeto io viene del req.app)
@@ -46,30 +46,40 @@ router.post('/', authMiddleware, permissionMiddleware('registrar_compra'), async
   }
 });
 
-// PUT /api/compras/:id — solo admin (editar números y nota)
+// PUT /api/compras/:id — solo admin (editar números, nota, transferido)
 router.put('/:id', authMiddleware, permissionMiddleware('editar_compra'), async (req, res) => {
   try {
-    const { comprador, numeros, nota } = req.body;
-
-    if (!numeros || numeros.length === 0)
-      return res.status(400).json({ message: 'Debe quedar al menos un número' });
+    const { comprador, numeros, nota, transferido } = req.body;
 
     const compra = await Compra.findById(req.params.id);
     if (!compra) return res.status(404).json({ message: 'Compra no encontrada' });
 
-    // Verificar que los nuevos números no estén tomados por OTRAS compras
-    const otras = await Compra.find({ rifaId: compra.rifaId, _id: { $ne: req.params.id } });
-    const ocupados = otras.flatMap(c => c.numeros);
-    const conflicto = numeros.filter(n => ocupados.includes(n));
-    if (conflicto.length > 0)
-      return res.status(400).json({ message: `Los números ${conflicto.join(', ')} ya pertenecen a otro comprador` });
+    const finalNumeros = numeros !== undefined ? numeros : compra.numeros;
+    if (!finalNumeros || finalNumeros.length === 0)
+      return res.status(400).json({ message: 'Debe quedar al menos un número' });
+
+    // Verificar que los nuevos números no estén tomados por OTRAS compras (solo si se enviaron números)
+    if (numeros !== undefined) {
+      const otras = await Compra.find({ rifaId: compra.rifaId, _id: { $ne: req.params.id } });
+      const ocupados = otras.flatMap(c => c.numeros);
+      const conflicto = finalNumeros.filter(n => ocupados.includes(n));
+      if (conflicto.length > 0)
+        return res.status(400).json({ message: `Los números ${conflicto.join(', ')} ya pertenecen a otro comprador` });
+    }
 
     const rifa = await Rifa.findById(compra.rifaId);
-    const montoTotal = numeros.length * rifa.precioPorNumero;
+    if (!rifa) return res.status(404).json({ message: 'Rifa no encontrada' });
+    const montoTotal = finalNumeros.length * rifa.precioPorNumero;
 
     const updated = await Compra.findByIdAndUpdate(
       req.params.id,
-      { comprador: comprador || compra.comprador, numeros, montoTotal, nota: nota ?? compra.nota },
+      {
+        comprador: comprador !== undefined ? comprador.trim() : compra.comprador,
+        numeros: finalNumeros,
+        montoTotal,
+        nota: nota !== undefined ? nota : compra.nota,
+        transferido: transferido !== undefined ? transferido : compra.transferido
+      },
       { new: true }
     );
 

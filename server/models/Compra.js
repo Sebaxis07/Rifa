@@ -5,7 +5,8 @@ const compraSchema = new mongoose.Schema({
   comprador: { type: String, required: true },
   numeros: [{ type: Number }],
   montoTotal: { type: Number, required: true },
-  nota: { type: String, default: '' }
+  nota: { type: String, default: '' },
+  transferido: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Compra', compraSchema);

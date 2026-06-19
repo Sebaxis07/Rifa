@@ -115,8 +115,15 @@ function FeedItem({ compra, isNew }) {
         {compra.comprador.substring(0, 2).toUpperCase()}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {compra.comprador}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {compra.comprador}
+          </div>
+          {compra.transferido ? (
+            <span title="Pago verificado" style={{ color: '#34d399', fontSize: '0.75rem', fontWeight: 800, flexShrink: 0 }}>✓</span>
+          ) : (
+            <span title="Pendiente de pago" style={{ color: '#fbbf24', fontSize: '0.75rem', flexShrink: 0 }}>⏳</span>
+          )}
         </div>
         <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>
           {compra.numeros.length} número{compra.numeros.length !== 1 ? 's' : ''} · {formatCLP(compra.montoTotal)}

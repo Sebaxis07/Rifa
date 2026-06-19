@@ -10,6 +10,7 @@ export default function EditCompraModal({ compra, todasCompras, precioPorNumero,
   const [nota, setNota]           = useState(compra.nota || '');
   const [numeros, setNumeros]     = useState([...compra.numeros]);
   const [loading, setLoading]     = useState(false);
+  const [transferido, setTransferido] = useState(compra.transferido || false);
 
   // Números ocupados por OTRAS compras
   const ocupadosPorOtros = todasCompras
@@ -32,7 +33,7 @@ export default function EditCompraModal({ compra, todasCompras, precioPorNumero,
     setLoading(true);
     try {
       await axios.put(`${API}/api/compras/${compra._id}`,
-        { comprador: comprador.trim(), numeros, nota },
+        { comprador: comprador.trim(), numeros, nota, transferido },
         { headers: { Authorization: `Bearer ${getToken()}` } }
       );
       toast.success('Compra actualizada');
@@ -162,6 +163,19 @@ export default function EditCompraModal({ compra, todasCompras, precioPorNumero,
               onChange={e => setNota(e.target.value)}
               placeholder="Ej: Pagó en efectivo"
             />
+          </div>
+
+          <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, display: 'flex', marginTop: 4 }}>
+            <input
+              id="edit-input-transferido"
+              type="checkbox"
+              checked={transferido}
+              onChange={e => setTransferido(e.target.checked)}
+              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--success)' }}
+            />
+            <label htmlFor="edit-input-transferido" className="form-label" style={{ margin: 0, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: 'var(--white-80)' }}>
+              Marcar como transferido / pagado
+            </label>
           </div>
 
           {/* Resumen */}

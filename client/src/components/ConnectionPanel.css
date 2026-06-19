@@ -7,6 +7,11 @@
   right: 28px;
   z-index: 999;
   font-family: 'Inter', sans-serif;
+  touch-action: none;
+}
+
+.connection-panel-container.dragging {
+  user-select: none;
 }
 
 /* ── FAB Trigger Button ─────────────────────────────────────────── */

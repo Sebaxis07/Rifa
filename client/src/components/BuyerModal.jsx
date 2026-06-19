@@ -8,6 +8,7 @@ export default function BuyerModal({ rifaId, precioPorNumero, compras, onClose, 
   const [nota, setNota] = useState('');
   const [selectedNums, setSelectedNums] = useState(initialSelectedNums);
   const [loading, setLoading] = useState(false);
+  const [transferido, setTransferido] = useState(false);
 
   const ocupados = compras.flatMap(c => c.numeros);
 
@@ -27,7 +28,7 @@ export default function BuyerModal({ rifaId, precioPorNumero, compras, onClose, 
     setLoading(true);
     try {
       await axios.post(`${API}/api/compras`, {
-        rifaId, comprador: comprador.trim(), numeros: selectedNums, nota
+        rifaId, comprador: comprador.trim(), numeros: selectedNums, nota, transferido
       }, { headers: { Authorization: `Bearer ${getToken()}` } });
 
       toast.success(`✅ Compra registrada — ${selectedNums.length} número(s)`);
@@ -107,6 +108,19 @@ export default function BuyerModal({ rifaId, precioPorNumero, compras, onClose, 
               onChange={e => setNota(e.target.value)}
               placeholder="Ej: Pagó en efectivo"
             />
+          </div>
+
+          <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, display: 'flex', marginTop: 4 }}>
+            <input
+              id="input-transferido"
+              type="checkbox"
+              checked={transferido}
+              onChange={e => setTransferido(e.target.checked)}
+              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--success)' }}
+            />
+            <label htmlFor="input-transferido" className="form-label" style={{ margin: 0, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: 'var(--white-80)' }}>
+              Marcar como transferido / pagado
+            </label>
           </div>
 
           {selectedNums.length > 0 && (

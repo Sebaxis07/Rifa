@@ -11,7 +11,51 @@ import EditRifaModal from '../components/EditRifaModal';
 import socket from '../socket';
 
 const formatDate = (d) => new Date(d).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
-const formatCLP  = (n) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(n);
+const formatCLP  = (n) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n);
+
+const getTransferStatus = (compra) => {
+  if (compra.transferido) {
+    return {
+      status: 'success',
+      label: 'Transferido',
+      icon: '✅',
+      daysLeftText: 'Pago verificado'
+    };
+  }
+
+  const createdTime = new Date(compra.createdAt).getTime();
+  const limitTime = createdTime + 3 * 24 * 60 * 60 * 1000;
+  const msRemaining = limitTime - Date.now();
+
+  if (msRemaining <= 0) {
+    const daysOverdue = Math.floor(Math.abs(msRemaining) / (24 * 60 * 60 * 1000));
+    return {
+      status: 'danger',
+      label: 'Vencido',
+      icon: '⚠️',
+      daysLeftText: daysOverdue === 0 ? 'Venció hoy' : `Vencido hace ${daysOverdue}d`
+    };
+  }
+
+  const hoursRemaining = Math.floor(msRemaining / (60 * 60 * 1000));
+  if (hoursRemaining <= 24) {
+    return {
+      status: 'warning',
+      label: 'Expira pronto',
+      icon: '⚠️',
+      daysLeftText: `Vence en ${hoursRemaining}h`
+    };
+  }
+
+  const daysRemaining = Math.floor(hoursRemaining / 24);
+  const remainingHours = hoursRemaining % 24;
+  return {
+    status: 'pending',
+    label: 'Pendiente',
+    icon: '⏳',
+    daysLeftText: `Vence en ${daysRemaining}d ${remainingHours}h`
+  };
+};
 
 export default function RifaDetail() {
   const { id } = useParams();
@@ -19,23 +63,32 @@ export default function RifaDetail() {
   const { user } = useAuth();
   const isAdmin = user?.rol === 'admin';
 
-  const [rifa, setRifa]           = useState(null);
-  const [compras, setCompras]     = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editCompra, setEditCompra] = useState(null); // compra a editar
+  const [rifa, setRifa]             = useState(null);
+  const [compras, setCompras]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [showModal, setShowModal]   = useState(false);
+  const [editCompra, setEditCompra] = useState(null);
   const [showEditRifa, setShowEditRifa] = useState(false);
   const [selectedNums, setSelectedNums] = useState([]);
-  const [tab, setTab]             = useState('grilla');
+  const [tab, setTab]               = useState('grilla');
+
+  const handleToggleTransfer = async (compra) => {
+    try {
+      const newStatus = !compra.transferido;
+      await axios.put(`${API}/api/compras/${compra._id}`, 
+        { transferido: newStatus },
+        { headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+      toast.success(newStatus ? 'Pago verificado correctamente' : 'Pago marcado como pendiente');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Error al actualizar transferencia');
+    }
+  };
 
   const handleNumberClick = (num) => {
-    setSelectedNums(prev => {
-      if (prev.includes(num)) {
-        return prev.filter(n => n !== num);
-      } else {
-        return [...prev, num].sort((a, b) => a - b);
-      }
-    });
+    setSelectedNums(prev =>
+      prev.includes(num) ? prev.filter(n => n !== num) : [...prev, num].sort((a, b) => a - b)
+    );
   };
 
   useEffect(() => {
@@ -48,32 +101,22 @@ export default function RifaDetail() {
 
     socket.connect();
     socket.emit('join_rifa', id);
-
     socket.on('compra_nueva', (compra) => {
       setCompras(prev => [compra, ...prev]);
       toast.success(`Compra registrada — ${compra.comprador}`);
     });
-    socket.on('compra_eliminada', ({ id: cid }) => {
-      setCompras(prev => prev.filter(c => c._id !== cid));
-    });
-    socket.on('compra_actualizada', (updated) => {
-      setCompras(prev => prev.map(c => c._id === updated._id ? updated : c));
-    });
+    socket.on('compra_eliminada', ({ id: cid }) => setCompras(prev => prev.filter(c => c._id !== cid)));
+    socket.on('compra_actualizada', (updated) => setCompras(prev => prev.map(c => c._id === updated._id ? updated : c)));
 
     let interval = null;
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
       interval = setInterval(() => {
-        axios.get(`${API}/api/compras/${id}`)
-          .then(c => setCompras(c.data))
-          .catch(console.error);
+        axios.get(`${API}/api/compras/${id}`).then(c => setCompras(c.data)).catch(console.error);
       }, 15000);
     }
-
     return () => {
       socket.emit('leave_rifa', id);
-      socket.off('compra_nueva');
-      socket.off('compra_eliminada');
-      socket.off('compra_actualizada');
+      socket.off('compra_nueva'); socket.off('compra_eliminada'); socket.off('compra_actualizada');
       socket.disconnect();
       if (interval) clearInterval(interval);
     };
@@ -97,8 +140,8 @@ export default function RifaDetail() {
   };
 
   if (loading) return (
-    <div className="page" style={{ paddingTop: 80, textAlign: 'center' }}>
-      <span className="animate-pulse" style={{ color: 'var(--white-30)', fontSize: '0.85rem' }}>Cargando…</span>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="animate-pulse" style={{ color: 'var(--white-20)', fontSize: '0.82rem' }}>Cargando…</div>
     </div>
   );
 
@@ -113,12 +156,25 @@ export default function RifaDetail() {
   const porcentaje      = ((numerosVendidos / rifa.totalNumeros) * 100).toFixed(1);
   const recaudado       = compras.reduce((a, c) => a + c.montoTotal, 0);
   const faltante        = (rifa.totalNumeros - numerosVendidos) * rifa.precioPorNumero;
+  const pctNum          = parseFloat(porcentaje);
+  const progressColor   = pctNum >= 75 ? 'var(--success)' : pctNum >= 40 ? 'var(--warning)' : 'var(--white)';
+
+  const expiredOrExpiringCount = compras.filter(c => !c.transferido).reduce((acc, c) => {
+    const createdTime = new Date(c.createdAt).getTime();
+    const limitTime = createdTime + 3 * 24 * 60 * 60 * 1000;
+    const msRemaining = limitTime - Date.now();
+    if (msRemaining <= 24 * 60 * 60 * 1000) {
+      return acc + 1;
+    }
+    return acc;
+  }, 0);
 
   return (
-    <div className="page">
-      {/* Guest banner */}
+    <div className="page" style={{ paddingBottom: 80 }}>
+
+      {/* ── Guest banner ── */}
       {!user && (
-        <div className="guest-banner">
+        <div className="guest-banner" style={{ marginBottom: 20 }}>
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
             <circle cx="8" cy="5" r="2.5" /><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" />
           </svg>
@@ -126,108 +182,233 @@ export default function RifaDetail() {
         </div>
       )}
 
-      {/* Breadcrumb */}
-      <div className="breadcrumb">
+      {/* ── Admin Warning Banner ── */}
+      {isAdmin && expiredOrExpiringCount > 0 && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.22)',
+          borderRadius: 14,
+          padding: '14px 20px',
+          marginBottom: 20,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          boxShadow: '0 8px 32px rgba(239, 68, 68, 0.15)',
+        }}>
+          <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: '#f87171' }}>
+              Alerta de Transferencias Pendientes
+            </h4>
+            <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--white-60)' }}>
+              Hay <strong>{expiredOrExpiringCount}</strong> compra(s) sin registrar transferencia que han superado o están a menos de 24 horas del límite de 3 días.
+            </p>
+          </div>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setTab('lista')}
+            style={{
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              color: '#f87171',
+              background: 'rgba(239, 68, 68, 0.05)',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+            }}
+          >
+            Ver Lista
+          </button>
+        </div>
+      )}
+
+      {/* ── Breadcrumb ── */}
+      <div className="breadcrumb" style={{ marginBottom: 24 }}>
         <Link to="/">Rifas</Link>
         <span className="breadcrumb-sep">/</span>
         <span className="breadcrumb-current">{rifa.nombre}</span>
       </div>
 
-      {/* Header */}
-      <div className="rifa-detail-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, marginBottom: 28, flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-            <h1>{rifa.nombre}</h1>
-            <span className={`pill ${rifa.estado}`}><span className="dot"/>{rifa.estado}</span>
-          </div>
-          <p style={{ marginBottom: 16 }}>Premio: <strong style={{ color: 'var(--white-90)' }}>{rifa.nombrePremio}</strong></p>
-          <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
-            {rifa.fechaInicio && (
+      {/* ── HERO ── */}
+      <div style={{
+        position: 'relative',
+        background: rifa.imagenPremio
+          ? `linear-gradient(to bottom, rgba(8,8,8,0.3) 0%, rgba(8,8,8,0.85) 60%, #080808 100%)`
+          : 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+        border: '1px solid var(--border)',
+        borderRadius: 20,
+        overflow: 'hidden',
+        marginBottom: 20,
+        minHeight: 200,
+      }}>
+        {/* Fondo imagen borrosa */}
+        {rifa.imagenPremio && (
+          <img
+            src={`${API}${rifa.imagenPremio}`}
+            alt=""
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover', filter: 'blur(40px) saturate(0.4)', opacity: 0.35, zIndex: 0,
+            }}
+          />
+        )}
+
+        <div style={{ position: 'relative', zIndex: 1, padding: '28px 32px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+          {/* Left */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <span className={`pill ${rifa.estado}`}><span className="dot" />{rifa.estado}</span>
+              {isAdmin && (
+                <span style={{ fontSize: '0.65rem', color: 'var(--white-20)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>
+                  ID: {id.slice(-6)}
+                </span>
+              )}
+            </div>
+            <h1 style={{ fontSize: 'clamp(1.6rem, 3vw, 2.4rem)', marginBottom: 6, letterSpacing: '-0.04em' }}>
+              {rifa.nombre}
+            </h1>
+            <p style={{ fontSize: '1rem', color: 'var(--white-40)', marginBottom: 20 }}>
+              Premio: <strong style={{ color: 'var(--white-80, rgba(255,255,255,0.8))' }}>{rifa.nombrePremio}</strong>
+            </p>
+
+            {/* Meta row */}
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              {rifa.fechaInicio && (
+                <div>
+                  <div className="section-label">Inicio</div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{formatDate(rifa.fechaInicio)}</div>
+                </div>
+              )}
               <div>
-                <div className="section-label">Inicio</div>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{formatDate(rifa.fechaInicio)}</div>
+                <div className="section-label">Sorteo</div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{formatDate(rifa.fechaSorteo)}</div>
+              </div>
+              <div>
+                <div className="section-label">Precio / número</div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{formatCLP(rifa.precioPorNumero)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right — image + actions */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 14 }}>
+            {rifa.imagenPremio && (
+              <img
+                src={`${API}${rifa.imagenPremio}`}
+                alt={rifa.nombrePremio}
+                style={{ width: 110, height: 110, objectFit: 'cover', borderRadius: 14, border: '2px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+              />
+            )}
+            {isAdmin && (
+              <div className="rifa-detail-actions" style={{ display: 'flex', gap: 7, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button className="btn btn-danger btn-sm" id="btn-delete-rifa" onClick={handleDeleteRifa}>Eliminar</button>
+                <button className="btn btn-ghost btn-sm" id="btn-editar-rifa" onClick={() => setShowEditRifa(true)}>Editar</button>
+                <Link to={`/rifa/${id}/vista`} className="btn btn-ghost btn-sm" id="btn-vista" target="_blank">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ width: 13, height: 13 }}>
+                    <circle cx="8" cy="8" r="3" /><path d="M1 8C3 4 13 4 15 8c-2 4-12 4-14 0z" />
+                  </svg>
+                  Vista supervisor
+                </Link>
+                <Link to={`/rifa/${id}/analytics`} className="btn btn-ghost btn-sm" id="btn-analytics">Analytics</Link>
+                <button className="btn btn-primary btn-sm" id="btn-registrar-compra" onClick={() => setShowModal(true)}>
+                  + Registrar compra
+                </button>
               </div>
             )}
-            <div>
-              <div className="section-label">Sorteo</div>
-              <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{formatDate(rifa.fechaSorteo)}</div>
-            </div>
-            <div>
-              <div className="section-label">Precio / número</div>
-              <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{formatCLP(rifa.precioPorNumero)}</div>
-            </div>
           </div>
         </div>
 
-        <div className="rifa-detail-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>
-          {rifa.imagenPremio && (
-            <img
-              src={`${API}${rifa.imagenPremio}`}
-              alt={rifa.nombrePremio}
-              style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border-light)' }}
-            />
-          )}
-          {isAdmin && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <button className="btn btn-danger btn-sm" id="btn-delete-rifa" onClick={handleDeleteRifa}>Eliminar rifa</button>
-              <button className="btn btn-ghost btn-sm" id="btn-editar-rifa" onClick={() => setShowEditRifa(true)}>Editar Rifa</button>
-              <Link to={`/rifa/${id}/vista`} className="btn btn-ghost btn-sm" id="btn-vista" target="_blank">Vista Supervisor</Link>
-              <Link to={`/rifa/${id}/analytics`} className="btn btn-ghost btn-sm" id="btn-analytics">Analytics</Link>
-              <button className="btn btn-primary" id="btn-registrar-compra" onClick={() => setShowModal(true)}>
-                Registrar Compra
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="stats-grid" style={{ marginBottom: 28 }}>
-        <div className="stat-card">
-          <div className="stat-label">Vendidos</div>
-          <div className="stat-value">{numerosVendidos}<span style={{ fontSize: '1rem', color: 'var(--white-20)', fontWeight: 400 }}>/41</span></div>
-          <div style={{ marginTop: 10 }}>
-            <div className="progress-bar-bg">
-              <div className={`progress-bar-fill ${parseFloat(porcentaje) >= 75 ? 'success' : ''}`} style={{ width: `${porcentaje}%` }} />
-            </div>
+        {/* Progress bar at bottom of hero */}
+        <div style={{ position: 'relative', zIndex: 1, padding: '0 32px 24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--white-30)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Progreso de ventas
+            </span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: progressColor }}>
+              {numerosVendidos} / {rifa.totalNumeros} · {porcentaje}%
+            </span>
+          </div>
+          <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${porcentaje}%`, background: progressColor, borderRadius: 99, transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1)' }} />
           </div>
         </div>
-        <div className="stat-card success">
-          <div className="stat-label">Avance</div>
-          <div className="stat-value">{porcentaje}%</div>
-          <div className="stat-sub">{41 - numerosVendidos} disponibles</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Recaudado</div>
-          <div className="stat-value" style={{ fontSize: '1.4rem' }}>{formatCLP(recaudado)}</div>
-        </div>
-        <div className="stat-card warning">
-          <div className="stat-label">Por Recaudar</div>
-          <div className="stat-value" style={{ fontSize: '1.4rem' }}>{formatCLP(faltante)}</div>
+      </div>
+
+      {/* ── STATS ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: 'Números vendidos', value: numerosVendidos, sub: `${41 - numerosVendidos} disponibles`, accent: null },
+          { label: 'Avance', value: `${porcentaje}%`, sub: null, accent: progressColor },
+          { label: 'Total recaudado', value: formatCLP(recaudado), sub: null, accent: 'var(--success)' },
+          { label: 'Por recaudar', value: formatCLP(faltante), sub: null, accent: 'var(--warning)' },
+        ].map(({ label, value, sub, accent }) => (
+          <div key={label} style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 14,
+            padding: '18px 20px',
+            transition: 'border-color 0.18s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-light)'}
+            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+          >
+            <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--white-30)', marginBottom: 10 }}>
+              {label}
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.04em', lineHeight: 1, color: accent || 'var(--white)' }}>
+              {value}
+            </div>
+            {sub && <div style={{ fontSize: '0.72rem', color: 'var(--white-30)', marginTop: 5 }}>{sub}</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* ── TABS ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+        <div className="tabs" style={{ borderBottom: 'none', marginBottom: 0 }}>
+          <button className={`tab-btn ${tab === 'grilla' ? 'active' : ''}`} id="tab-grilla" onClick={() => setTab('grilla')}>
+            Grilla de números
+          </button>
+          <button className={`tab-btn ${tab === 'lista' ? 'active' : ''}`} id="tab-lista" onClick={() => setTab('lista')}>
+            Compradores
+            {compras.length > 0 && (
+              <span style={{
+                marginLeft: 7, background: 'var(--surface-3)', color: 'var(--white-40)',
+                fontSize: '0.62rem', fontWeight: 700, padding: '1px 6px', borderRadius: 99,
+              }}>{compras.length}</span>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="tabs">
-        <button className={`tab-btn ${tab === 'grilla' ? 'active' : ''}`} id="tab-grilla" onClick={() => setTab('grilla')}>Grilla de Números</button>
-        <button className={`tab-btn ${tab === 'lista'  ? 'active' : ''}`} id="tab-lista"  onClick={() => setTab('lista')}>Compradores</button>
-      </div>
-
-      {tab === 'grilla' ? (
-        <div className="card">
+      {/* ── TAB: GRILLA ── */}
+      {tab === 'grilla' && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 24 }}>
           <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginBottom: 18, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--white)' }} />
-              <span style={{ fontSize: '0.75rem', color: 'var(--white-40)' }}>Vendido</span>
-            </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <div style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--surface-2)', border: '1px solid var(--border)' }} />
-              <span style={{ fontSize: '0.75rem', color: 'var(--white-40)' }}>Disponible</span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--white-20)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              {numerosVendidos} vendidos · {41 - numerosVendidos} libres
+            </span>
+            <div style={{ display: 'flex', gap: 14, marginLeft: 'auto' }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--white)' }} />
+                <span style={{ fontSize: '0.72rem', color: 'var(--white-30)' }}>Vendido</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div style={{ width: 10, height: 10, borderRadius: 3, background: 'var(--surface-3)', border: '1px solid var(--border)' }} />
+                <span style={{ fontSize: '0.72rem', color: 'var(--white-30)' }}>Disponible</span>
+              </div>
+              {isAdmin && (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 3, background: 'transparent', border: '1.5px solid var(--white)', boxShadow: '0 0 0 1px var(--white)' }} />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--white-30)' }}>Seleccionado</span>
+                </div>
+              )}
             </div>
           </div>
           <NumberGrid compras={compras} isAdmin={isAdmin} onCellClick={handleNumberClick} selectedNums={selectedNums} />
         </div>
-      ) : (
+      )}
+
+      {/* ── TAB: LISTA ── */}
+      {tab === 'lista' && (
         compras.length === 0 ? (
           <div className="empty-state">
             <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1" className="empty-icon">
@@ -237,142 +418,179 @@ export default function RifaDetail() {
             <p>Los números vendidos aparecerán aquí</p>
           </div>
         ) : (
-          <div className="table-wrap">
-            <table>
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.825rem' }}>
               <thead>
-                <tr>
-                  <th>Comprador</th>
-                  <th>Números</th>
-                  <th>Cant.</th>
-                  <th>Monto</th>
-                  <th>Fecha</th>
-                  <th>Nota</th>
-                  {isAdmin && <th style={{ width: 140 }}></th>}
+                <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                  {['Comprador', 'Números', 'Cant.', 'Monto', 'Fecha', 'Nota', 'Estado de Pago', ...(isAdmin ? [''] : [])].map(h => (
+                    <th key={h} style={{ padding: '12px 18px', fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--white-25, rgba(255,255,255,0.25))', textAlign: 'left' }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {compras.map(c => (
-                  <tr key={c._id} id={`compra-row-${c._id}`}>
-                    <td style={{ fontWeight: 600 }}>{c.comprador}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {c.numeros.sort((a,b)=>a-b).map(n => (
-                          <span key={n} style={{ background: 'var(--white)', color: 'var(--bg)', padding: '1px 6px', borderRadius: 3, fontSize: '0.68rem', fontWeight: 700 }}>
-                            {String(n).padStart(2,'0')}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td style={{ color: 'var(--white-60)' }}>{c.numeros.length}</td>
-                    <td style={{ fontWeight: 700 }}>{formatCLP(c.montoTotal)}</td>
-                    <td style={{ color: 'var(--white-30)', fontSize: '0.78rem' }}>
-                      {new Date(c.createdAt).toLocaleString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td style={{ color: 'var(--white-30)', fontSize: '0.78rem' }}>{c.nota || '—'}</td>
-                    {isAdmin && (
-                      <td>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            id={`btn-edit-${c._id}`}
-                            onClick={() => setEditCompra(c)}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            className="btn btn-danger btn-sm"
-                            id={`btn-del-${c._id}`}
-                            onClick={() => handleDeleteCompra(c._id)}
-                          >
-                            Eliminar
-                          </button>
+                {compras.map((c, i) => {
+                  const transferInfo = getTransferStatus(c);
+                  
+                  let badgeStyle = {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '4px 10px',
+                    borderRadius: 999,
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.03em',
+                  };
+
+                  if (transferInfo.status === 'success') {
+                    badgeStyle = {
+                      ...badgeStyle,
+                      background: 'rgba(52, 211, 153, 0.12)',
+                      color: '#34d399',
+                      border: '1px solid rgba(52, 211, 153, 0.2)'
+                    };
+                  } else if (transferInfo.status === 'danger') {
+                    badgeStyle = {
+                      ...badgeStyle,
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      color: '#f87171',
+                      border: '1px solid rgba(239, 68, 68, 0.2)'
+                    };
+                  } else if (transferInfo.status === 'warning') {
+                    badgeStyle = {
+                      ...badgeStyle,
+                      background: 'rgba(251, 191, 36, 0.12)',
+                      color: '#fbbf24',
+                      border: '1px solid rgba(251, 191, 36, 0.2)'
+                    };
+                  } else {
+                    badgeStyle = {
+                      ...badgeStyle,
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      color: 'rgba(255, 255, 255, 0.5)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)'
+                    };
+                  }
+
+                  return (
+                    <tr key={c._id} id={`compra-row-${c._id}`}
+                      style={{ borderBottom: i < compras.length - 1 ? '1px solid var(--border)' : 'none', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.025)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ padding: '13px 18px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
+                            {c.comprador.substring(0, 2).toUpperCase()}
+                          </div>
+                          <span style={{ fontWeight: 600, color: 'var(--white-90)' }}>{c.comprador}</span>
                         </div>
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td style={{ padding: '13px 18px' }}>
+                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                          {c.numeros.sort((a, b) => a - b).map(n => (
+                            <span key={n} style={{ background: 'var(--white)', color: 'var(--bg)', padding: '1px 6px', borderRadius: 4, fontSize: '0.65rem', fontWeight: 800 }}>
+                              {String(n).padStart(2, '0')}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ padding: '13px 18px', color: 'var(--white-40)', fontWeight: 600 }}>{c.numeros.length}</td>
+                      <td style={{ padding: '13px 18px', fontWeight: 700, color: 'var(--white-90)' }}>{formatCLP(c.montoTotal)}</td>
+                      <td style={{ padding: '13px 18px', color: 'var(--white-30)', fontSize: '0.75rem' }}>
+                        {new Date(c.createdAt).toLocaleString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td style={{ padding: '13px 18px', color: 'var(--white-25, rgba(255,255,255,0.25))', fontSize: '0.78rem' }}>
+                        {c.nota || <span style={{ opacity: 0.3 }}>—</span>}
+                      </td>
+                      <td style={{ padding: '13px 18px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {isAdmin ? (
+                            <input
+                              type="checkbox"
+                              checked={c.transferido || false}
+                              onChange={() => handleToggleTransfer(c)}
+                              title={c.transferido ? "Marcar como pendiente" : "Marcar como verificado / pagado"}
+                              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--success)' }}
+                            />
+                          ) : null}
+                          <span style={badgeStyle}>
+                            <span style={{ fontSize: '0.65rem' }}>{transferInfo.icon}</span>
+                            <span>{transferInfo.label}</span>
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--white-30)' }}>
+                            {transferInfo.daysLeftText}
+                          </span>
+                        </div>
+                      </td>
+                      {isAdmin && (
+                        <td style={{ padding: '13px 18px' }}>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn btn-ghost btn-sm" id={`btn-edit-${c._id}`} onClick={() => setEditCompra(c)}>Editar</button>
+                            <button className="btn btn-danger btn-sm" id={`btn-del-${c._id}`} onClick={() => handleDeleteCompra(c._id)}>Eliminar</button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )
       )}
 
+      {/* ── Modals ── */}
       {showModal && (
         <BuyerModal
-          rifaId={id}
-          precioPorNumero={rifa.precioPorNumero}
-          compras={compras}
+          rifaId={id} precioPorNumero={rifa.precioPorNumero} compras={compras}
           onClose={() => setShowModal(false)}
           initialSelectedNums={selectedNums}
           onSuccess={() => setSelectedNums([])}
         />
       )}
 
-      {isAdmin && selectedNums.length > 0 && (
-        <div style={{
-          position: 'fixed',
-          bottom: 24,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'rgba(10, 10, 10, 0.85)',
-          backdropFilter: 'blur(12px)',
-          border: '1.5px solid var(--border)',
-          borderRadius: 16,
-          padding: '12px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 20,
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6)',
-          zIndex: 1000,
-          width: '90%',
-          maxWidth: 600,
-          justifyContent: 'space-between'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{
-              background: 'var(--white)',
-              color: 'var(--bg)',
-              fontWeight: 800,
-              fontSize: '0.78rem',
-              padding: '2px 8px',
-              borderRadius: 6
-            }}>
-              {selectedNums.length}
-            </span>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--white-80)' }}>
-              Número(s) seleccionado(s): <strong style={{ color: 'var(--white)' }}>{selectedNums.join(', ')}</strong>
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedNums([])}>
-              Limpiar
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
-              Vender
-            </button>
-          </div>
-        </div>
-      )}
-
       {editCompra && (
         <EditCompraModal
-          compra={editCompra}
-          todasCompras={compras}
-          precioPorNumero={rifa.precioPorNumero}
-          onClose={() => setEditCompra(null)}
-          onSuccess={() => setEditCompra(null)}
+          compra={editCompra} todasCompras={compras} precioPorNumero={rifa.precioPorNumero}
+          onClose={() => setEditCompra(null)} onSuccess={() => setEditCompra(null)}
         />
       )}
 
       {showEditRifa && (
         <EditRifaModal
-          rifa={rifa}
-          onClose={() => setShowEditRifa(false)}
-          onSuccess={(updatedRifa) => {
-            setRifa(updatedRifa);
-            setShowEditRifa(false);
-          }}
+          rifa={rifa} onClose={() => setShowEditRifa(false)}
+          onSuccess={(updatedRifa) => { setRifa(updatedRifa); setShowEditRifa(false); }}
         />
+      )}
+
+      {/* ── Floating selection bar ── */}
+      {isAdmin && selectedNums.length > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(8,8,8,0.9)', backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16,
+          padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 18,
+          boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
+          zIndex: 1000, width: '90%', maxWidth: 560, justifyContent: 'space-between',
+          animation: 'slideUp 0.2s cubic-bezier(0.4,0,0.2,1)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ background: 'var(--white)', color: 'var(--bg)', fontWeight: 800, fontSize: '0.75rem', padding: '2px 9px', borderRadius: 6 }}>
+              {selectedNums.length}
+            </span>
+            <span style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--white-60)' }}>
+              Seleccionados: <strong style={{ color: 'var(--white)' }}>{selectedNums.join(', ')}</strong>
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedNums([])}>Limpiar</button>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>Vender →</button>
+          </div>
+        </div>
       )}
     </div>
   );
