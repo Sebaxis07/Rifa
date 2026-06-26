@@ -23,7 +23,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization'],
 };
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Pre-flight para todas las rutas
+app.options('(.*)', cors(corsOptions)); // Pre-flight para todas las rutas (Express 5)
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
