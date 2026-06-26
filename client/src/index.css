@@ -596,3 +596,36 @@ tbody tr:hover { background: var(--white-5); }
   .btn-sm { padding: 5px 10px; font-size: 0.72rem; }
   .rifa-card-body { padding: 14px 16px; }
 }
+
+/* Custom Webkit Autofill Override for Dark Mode */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-2) inset !important;
+  -webkit-text-fill-color: var(--white) !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: var(--white);
+}
+
+/* Permissions Grid Container Style Overrides */
+.permissions-grid {
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  padding: 12px !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+  background: var(--surface-2) !important;
+  overflow: visible !important;
+  max-height: none !important;
+  height: auto !important;
+}
+
+@media (max-width: 580px) {
+  .permissions-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+

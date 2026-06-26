@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
 import { API, getToken } from '../context/AuthContext';
 import { useAuth } from '../context/AuthContext';
 import NumberGrid from '../components/NumberGrid';
@@ -71,6 +72,37 @@ export default function RifaDetail() {
   const [showEditRifa, setShowEditRifa] = useState(false);
   const [selectedNums, setSelectedNums] = useState([]);
   const [tab, setTab]               = useState('grilla');
+
+  const exportToExcel = () => {
+    if (compras.length === 0) {
+      toast.error('No hay compras para exportar');
+      return;
+    }
+    const data = compras.map((c) => ({
+      Comprador: c.comprador,
+      'Números': c.numeros.sort((a, b) => a - b).map(n => String(n).padStart(2, '0')).join(', '),
+      'Cant. Números': c.numeros.length,
+      'Monto Total (CLP)': c.montoTotal,
+      'Transferido': c.transferido ? 'SI' : 'NO',
+      'Fecha Compra': new Date(c.createdAt).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    // Column widths
+    ws['!cols'] = [
+      { wch: 28 }, // Comprador
+      { wch: 32 }, // Números
+      { wch: 14 }, // Cant.
+      { wch: 20 }, // Monto
+      { wch: 14 }, // Transferido
+      { wch: 20 }, // Fecha
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Compradores');
+    const fileName = `${rifa?.nombre?.replace(/\s+/g, '_') || 'rifa'}_compradores.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    toast.success(`Excel exportado: ${fileName}`);
+  };
 
   const handleToggleTransfer = async (compra) => {
     try {
@@ -158,6 +190,13 @@ export default function RifaDetail() {
   const faltante        = (rifa.totalNumeros - numerosVendidos) * rifa.precioPorNumero;
   const pctNum          = parseFloat(porcentaje);
   const progressColor   = pctNum >= 75 ? 'var(--success)' : pctNum >= 40 ? 'var(--warning)' : 'var(--white)';
+  const ocupadosList    = compras.flatMap(c => c.numeros).sort((a, b) => a - b);
+
+  const comprasPendientes = compras.filter(c => !c.transferido);
+  const comprasVerificadas = compras.filter(c => c.transferido);
+  const totalRecaudadoVerificado = comprasVerificadas.reduce((a, c) => a + c.montoTotal, 0);
+  const totalPendiente = comprasPendientes.reduce((a, c) => a + c.montoTotal, 0);
+  const tasaRecaudacion = recaudado > 0 ? ((totalRecaudadoVerificado / recaudado) * 100).toFixed(1) : '0.0';
 
   const expiredOrExpiringCount = compras.filter(c => !c.transferido).reduce((acc, c) => {
     const createdTime = new Date(c.createdAt).getTime();
@@ -376,7 +415,55 @@ export default function RifaDetail() {
               }}>{compras.length}</span>
             )}
           </button>
+          <button className={`tab-btn ${tab === 'transferencias' ? 'active' : ''}`} id="tab-transferencias" onClick={() => setTab('transferencias')}>
+            Transferencias
+            {compras.length > 0 && (
+              <span style={{
+                marginLeft: 7, background: 'var(--surface-3)', color: 'var(--white-40)',
+                fontSize: '0.62rem', fontWeight: 700, padding: '1px 6px', borderRadius: 99,
+              }}>
+                {comprasVerificadas.length}/{compras.length}
+              </span>
+            )}
+          </button>
         </div>
+
+        {/* ── Botón exportar Excel ── */}
+        {isAdmin && compras.length > 0 && (
+          <button
+            id="btn-export-excel"
+            onClick={exportToExcel}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '7px 14px',
+              borderRadius: 10,
+              border: '1px solid rgba(52, 211, 153, 0.3)',
+              background: 'rgba(52, 211, 153, 0.08)',
+              color: '#34d399',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.18s',
+              letterSpacing: '0.02em',
+              flexShrink: 0,
+              marginBottom: 1,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(52,211,153,0.16)'; e.currentTarget.style.borderColor = 'rgba(52,211,153,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(52,211,153,0.08)'; e.currentTarget.style.borderColor = 'rgba(52,211,153,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+            title="Exportar compradores a Excel"
+          >
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ width: 15, height: 15 }}>
+              <rect x="2" y="3" width="16" height="14" rx="2" />
+              <path d="M2 7h16" strokeLinecap="round" />
+              <path d="M7 7v10" strokeLinecap="round" />
+              <path d="M13 3v4" strokeLinecap="round" />
+              <path d="M10 11l2 2-2 2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Exportar Excel
+          </button>
+        )}
       </div>
 
       {/* ── TAB: GRILLA ── */}
@@ -384,7 +471,7 @@ export default function RifaDetail() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: 24 }}>
           <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginBottom: 18, flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--white-20)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              {numerosVendidos} vendidos · {41 - numerosVendidos} libres
+              {numerosVendidos} vendidos · {rifa.totalNumeros - numerosVendidos} libres
             </span>
             <div style={{ display: 'flex', gap: 14, marginLeft: 'auto' }}>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -404,6 +491,31 @@ export default function RifaDetail() {
             </div>
           </div>
           <NumberGrid compras={compras} isAdmin={isAdmin} onCellClick={handleNumberClick} selectedNums={selectedNums} />
+
+          {/* Lista de números ocupados */}
+          {ocupadosList.length > 0 && (
+            <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--white-30)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 12 }}>
+                Lista de Números Vendidos ({ocupadosList.length})
+              </span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {ocupadosList.map(n => (
+                  <span key={n} style={{
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--white)',
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    fontFamily: 'monospace'
+                  }}>
+                    {String(n).padStart(2, '0')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -483,7 +595,7 @@ export default function RifaDetail() {
                     >
                       <td style={{ padding: '13px 18px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
+                          <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
                             {c.comprador.substring(0, 2).toUpperCase()}
                           </div>
                           <span style={{ fontWeight: 600, color: 'var(--white-90)' }}>{c.comprador}</span>
@@ -507,23 +619,49 @@ export default function RifaDetail() {
                         {c.nota || <span style={{ opacity: 0.3 }}>—</span>}
                       </td>
                       <td style={{ padding: '13px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          {isAdmin ? (
-                            <input
-                              type="checkbox"
-                              checked={c.transferido || false}
-                              onChange={() => handleToggleTransfer(c)}
-                              title={c.transferido ? "Marcar como pendiente" : "Marcar como verificado / pagado"}
-                              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--success)' }}
-                            />
-                          ) : null}
-                          <span style={badgeStyle}>
-                            <span style={{ fontSize: '0.65rem' }}>{transferInfo.icon}</span>
-                            <span>{transferInfo.label}</span>
-                          </span>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--white-30)' }}>
-                            {transferInfo.daysLeftText}
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleToggleTransfer(c)}
+                              style={{
+                                position: 'relative',
+                                width: 34,
+                                height: 18,
+                                borderRadius: 999,
+                                background: c.transferido ? 'rgba(52, 211, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                border: c.transferido ? '1px solid #34d399' : '1px solid rgba(255, 255, 255, 0.15)',
+                                cursor: 'pointer',
+                                transition: 'all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                padding: '0 2px',
+                                outline: 'none',
+                                flexShrink: 0
+                              }}
+                              title={c.transferido ? "Marcar como pendiente" : "Marcar como verificado"}
+                            >
+                              <div style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: '50%',
+                                background: c.transferido ? '#34d399' : 'rgba(255, 255, 255, 0.4)',
+                                transition: 'all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                                transform: c.transferido ? 'translateX(18px)' : 'translateX(0px)',
+                                boxShadow: c.transferido ? '0 0 6px #34d399' : 'none'
+                              }} />
+                            </button>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <span style={badgeStyle}>
+                                <span style={{ fontSize: '0.65rem' }}>{transferInfo.icon}</span>
+                                <span>{transferInfo.label}</span>
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.68rem', color: 'var(--white-30)', fontWeight: 500, paddingLeft: 4 }}>
+                              {transferInfo.daysLeftText}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       {isAdmin && (
@@ -531,9 +669,18 @@ export default function RifaDetail() {
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button className="btn btn-ghost btn-sm" id={`btn-edit-${c._id}`} onClick={() => setEditCompra(c)}>Editar</button>
                             <button className="btn btn-danger btn-sm" id={`btn-del-${c._id}`} onClick={() => handleDeleteCompra(c._id)}>Eliminar</button>
+                            <Link
+                              to={`/comprobante/${c._id}`}
+                              target="_blank"
+                              className="btn btn-ghost btn-sm"
+                              id={`btn-comp-${c._id}`}
+                              title="Ver comprobante público"
+                              style={{ color: 'rgba(52,211,153,0.8)', borderColor: 'rgba(52,211,153,0.2)' }}
+                            >🎟️</Link>
                           </div>
                         </td>
                       )}
+
                     </tr>
                   );
                 })}
@@ -541,6 +688,334 @@ export default function RifaDetail() {
             </table>
           </div>
         )
+      )}
+
+      {/* ── TAB: TRANSFERENCIAS ── */}
+      {tab === 'transferencias' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Tarjetas de Resumen */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 14,
+              padding: '16px 20px',
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--white-30)', marginBottom: 8 }}>
+                Recaudado (Verificado)
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--success)', letterSpacing: '-0.03em', lineHeight: 1 }}>
+                {formatCLP(totalRecaudadoVerificado)}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--white-30)', marginTop: 5 }}>
+                {comprasVerificadas.length} transacciones
+              </div>
+            </div>
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 14,
+              padding: '16px 20px',
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--white-30)', marginBottom: 8 }}>
+                Por Recaudar (Pendiente)
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--warning)', letterSpacing: '-0.03em', lineHeight: 1 }}>
+                {formatCLP(totalPendiente)}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--white-30)', marginTop: 5 }}>
+                {comprasPendientes.length} transacciones
+              </div>
+            </div>
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 14,
+              padding: '16px 20px',
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--white-30)', marginBottom: 8 }}>
+                Tasa de Recaudación
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--white)', letterSpacing: '-0.03em', lineHeight: 1 }}>
+                {tasaRecaudacion}%
+              </div>
+              <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', marginTop: 8 }}>
+                <div style={{ height: '100%', width: `${tasaRecaudacion}%`, background: 'var(--success)', borderRadius: 99 }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Grid de dos columnas */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: 20
+          }}>
+            {/* Columna Pendientes */}
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid rgba(251, 191, 36, 0.15)',
+              borderRadius: 16,
+              padding: 20,
+              boxShadow: '0 8px 32px rgba(251, 191, 36, 0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 700, color: '#fbbf24' }}>
+                  <span>⏳</span> Pendientes de Pago
+                </h3>
+                <span style={{
+                  background: 'rgba(251, 191, 36, 0.12)',
+                  color: '#fbbf24',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 99
+                }}>
+                  {comprasPendientes.length}
+                </span>
+              </div>
+
+              {comprasPendientes.length === 0 ? (
+                <div style={{
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                  background: 'rgba(255,255,255,0.01)',
+                  borderRadius: 12,
+                  border: '1.5px dashed var(--border)',
+                }}>
+                  <div style={{ fontSize: '1.6rem', marginBottom: 8 }}>🎉</div>
+                  <h4 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--white-80)' }}>¡Todo al día!</h4>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: 'var(--white-35)' }}>No hay transferencias pendientes de verificación</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {comprasPendientes.map(c => {
+                    const statusInfo = getTransferStatus(c);
+                    return (
+                      <div key={c._id} style={{
+                        background: 'var(--surface-2)',
+                        border: '1.5px solid var(--border)',
+                        borderRadius: 12,
+                        padding: 14,
+                        transition: 'border-color 0.15s, transform 0.15s',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 12
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(251, 191, 36, 0.3)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.58rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
+                              {c.comprador.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--white-90)' }}>{c.comprador}</div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--white-30)', marginTop: 1 }}>
+                                Compra: {new Date(c.createdAt).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          </div>
+                          {isAdmin && (
+                            <button
+                              onClick={() => handleToggleTransfer(c)}
+                              style={{
+                                position: 'relative',
+                                width: 34,
+                                height: 18,
+                                borderRadius: 999,
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                cursor: 'pointer',
+                                transition: 'all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                padding: '0 2px',
+                                outline: 'none',
+                                flexShrink: 0
+                              }}
+                              title="Marcar como verificado"
+                            >
+                              <div style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: '50%',
+                                background: 'rgba(255, 255, 255, 0.4)',
+                                transition: 'all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                                transform: 'translateX(0px)'
+                              }} />
+                            </button>
+                          )}
+                        </div>
+
+                        {c.nota && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--white-40)', background: 'var(--surface-3)', padding: '6px 10px', borderRadius: 6, borderLeft: '2px solid rgba(255,255,255,0.1)' }}>
+                            {c.nota}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+                          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                            {c.numeros.sort((a, b) => a - b).map(n => (
+                              <span key={n} style={{ background: 'var(--white)', color: 'var(--bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.62rem', fontWeight: 800 }}>
+                                {String(n).padStart(2, '0')}
+                              </span>
+                            ))}
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--white)' }}>{formatCLP(c.montoTotal)}</div>
+                            <div style={{
+                              fontSize: '0.65rem',
+                              fontWeight: 600,
+                              color: statusInfo.status === 'danger' ? '#f87171' : statusInfo.status === 'warning' ? '#fbbf24' : 'var(--white-30)',
+                              marginTop: 1
+                            }}>
+                              {statusInfo.daysLeftText}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Columna Verificados */}
+            <div style={{
+              background: 'var(--surface)',
+              border: '1px solid rgba(52, 211, 153, 0.15)',
+              borderRadius: 16,
+              padding: 20,
+              boxShadow: '0 8px 32px rgba(52, 211, 153, 0.02)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 700, color: '#34d399' }}>
+                  <span>✅</span> Verificados / Transferidos
+                </h3>
+                <span style={{
+                  background: 'rgba(52, 211, 153, 0.12)',
+                  color: '#34d399',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: 99
+                }}>
+                  {comprasVerificadas.length}
+                </span>
+              </div>
+
+              {comprasVerificadas.length === 0 ? (
+                <div style={{
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                  background: 'rgba(255,255,255,0.01)',
+                  borderRadius: 12,
+                  border: '1.5px dashed var(--border)',
+                }}>
+                  <div style={{ fontSize: '1.6rem', marginBottom: 8 }}>⏳</div>
+                  <h4 style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, color: 'var(--white-80)' }}>Sin verificados</h4>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.72rem', color: 'var(--white-35)' }}>Aún no se han verificado transferencias de pago</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {comprasVerificadas.map(c => (
+                    <div key={c._id} style={{
+                      background: 'var(--surface-2)',
+                      border: '1.5px solid var(--border)',
+                      borderRadius: 12,
+                      padding: 14,
+                      transition: 'border-color 0.15s, transform 0.15s',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(52, 211, 153, 0.3)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(52,211,153,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.58rem', fontWeight: 800, color: '#34d399', flexShrink: 0 }}>
+                            {c.comprador.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--white-90)' }}>{c.comprador}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--white-30)', marginTop: 1 }}>
+                              Verificado: {new Date(c.updatedAt || c.createdAt).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleToggleTransfer(c)}
+                            style={{
+                              position: 'relative',
+                              width: 34,
+                              height: 18,
+                              borderRadius: 999,
+                              background: 'rgba(52, 211, 153, 0.2)',
+                              border: '1px solid #34d399',
+                              cursor: 'pointer',
+                              transition: 'all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '0 2px',
+                              outline: 'none',
+                              flexShrink: 0
+                            }}
+                            title="Marcar como pendiente"
+                          >
+                            <div style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              background: '#34d399',
+                              transition: 'all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                              transform: 'translateX(18px)',
+                              boxShadow: '0 0 6px #34d399'
+                            }} />
+                          </button>
+                        )}
+                      </div>
+
+                      {c.nota && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--white-40)', background: 'var(--surface-3)', padding: '6px 10px', borderRadius: 6, borderLeft: '2px solid rgba(255,255,255,0.1)' }}>
+                          {c.nota}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                          {c.numeros.sort((a, b) => a - b).map(n => (
+                            <span key={n} style={{ background: 'var(--white)', color: 'var(--bg)', padding: '1px 5px', borderRadius: 4, fontSize: '0.62rem', fontWeight: 800 }}>
+                              {String(n).padStart(2, '0')}
+                            </span>
+                          ))}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--white)' }}>{formatCLP(c.montoTotal)}</div>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            color: '#34d399',
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            marginTop: 1
+                          }}>
+                            <span>✅</span> Pago verificado
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Modals ── */}

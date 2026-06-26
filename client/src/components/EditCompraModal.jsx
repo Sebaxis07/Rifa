@@ -165,17 +165,56 @@ export default function EditCompraModal({ compra, todasCompras, precioPorNumero,
             />
           </div>
 
-          <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, display: 'flex', marginTop: 4 }}>
-            <input
-              id="edit-input-transferido"
-              type="checkbox"
-              checked={transferido}
-              onChange={e => setTransferido(e.target.checked)}
-              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--success)' }}
-            />
-            <label htmlFor="edit-input-transferido" className="form-label" style={{ margin: 0, cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: 'var(--white-80)' }}>
-              Marcar como transferido / pagado
-            </label>
+          <div style={{
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 12,
+            marginBottom: 12,
+            transition: 'border-color 0.2s',
+            borderColor: transferido ? 'rgba(52, 211, 153, 0.3)' : 'var(--border)'
+          }}>
+            <div>
+              <label style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: 'var(--white-90)', display: 'block', textAlign: 'left' }}>
+                ¿Pago verificado?
+              </label>
+              <span style={{ fontSize: '0.7rem', color: 'var(--white-40)', display: 'block', textAlign: 'left', marginTop: 2 }}>
+                Marcar si el comprador ya realizó la transferencia
+              </span>
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setTransferido(t => !t)}
+              style={{
+                position: 'relative',
+                width: 44,
+                height: 22,
+                borderRadius: 999,
+                background: transferido ? 'rgba(52, 211, 153, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                border: transferido ? '1.5px solid #34d399' : '1.5px solid rgba(255, 255, 255, 0.12)',
+                cursor: 'pointer',
+                transition: 'all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0 3px',
+                outline: 'none',
+              }}
+            >
+              <div style={{
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                background: transferido ? '#34d399' : 'rgba(255, 255, 255, 0.3)',
+                transition: 'all 0.25s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                transform: transferido ? 'translateX(22px)' : 'translateX(0px)',
+                boxShadow: transferido ? '0 0 10px rgba(52, 211, 153, 0.4)' : 'none'
+              }} />
+            </button>
           </div>
 
           {/* Resumen */}

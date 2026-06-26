@@ -11,6 +11,8 @@ import RifaDetail from './pages/RifaDetail';
 import Analytics from './pages/Analytics';
 import SupervisorView from './pages/SupervisorView';
 import UserManagement from './pages/UserManagement';
+import GlobalDashboard from './pages/GlobalDashboard';
+import Comprobante from './pages/Comprobante';
 
 function ProtectedRoute({ children, permission }) {
   const { user, loading } = useAuth();
@@ -60,6 +62,7 @@ function AppLayout() {
           <Route path="/rifa/:id/vista"      element={<ProtectedRoute><SupervisorView /></ProtectedRoute>} />
           <Route path="/nueva-rifa"          element={<ProtectedRoute permission="crear_rifa"><CreateRifa /></ProtectedRoute>} />
           <Route path="/usuarios"            element={<ProtectedRoute permission="gestionar_usuarios"><UserManagement /></ProtectedRoute>} />
+          <Route path="/resumen"             element={<ProtectedRoute><GlobalDashboard /></ProtectedRoute>} />
           <Route path="*"                    element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -86,7 +89,11 @@ export default function App() {
             error:   { iconTheme: { primary: '#ff4444', secondary: '#fff' } },
           }}
         />
-        <AppLayout />
+        {/* Ruta pública fuera del layout con sidebar */}
+        <Routes>
+          <Route path="/comprobante/:id" element={<Comprobante />} />
+          <Route path="*" element={<AppLayout />} />
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   );

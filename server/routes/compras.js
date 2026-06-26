@@ -4,8 +4,22 @@ const Compra = require('../models/Compra');
 const Rifa = require('../models/Rifa');
 const { authMiddleware, adminMiddleware, permissionMiddleware } = require('../middleware/auth');
 
+// GET /api/compras/comprobante/:id — público (vista pública de comprobante)
+router.get('/comprobante/:id', async (req, res) => {
+  try {
+    const compra = await Compra.findById(req.params.id);
+    if (!compra) return res.status(404).json({ message: 'Comprobante no encontrado' });
+    const rifa = await Rifa.findById(compra.rifaId);
+    if (!rifa) return res.status(404).json({ message: 'Rifa no encontrada' });
+    res.json({ compra, rifa });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /api/compras/:rifaId — público
 router.get('/:rifaId', async (req, res) => {
+
   try {
     const compras = await Compra.find({ rifaId: req.params.rifaId }).sort({ createdAt: -1 });
     res.json(compras);

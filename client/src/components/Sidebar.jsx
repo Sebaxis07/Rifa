@@ -34,6 +34,14 @@ const IconUsers = () => (
   </svg>
 );
 
+const IconChart = () => (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="sidebar-link-icon">
+    <rect x="1" y="9" width="3" height="6" rx="0.5" />
+    <rect x="6" y="5" width="3" height="10" rx="0.5" />
+    <rect x="11" y="1" width="3" height="14" rx="0.5" />
+  </svg>
+);
+
 export default function Sidebar({ isOpen, onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -82,6 +90,18 @@ export default function Sidebar({ isOpen, onClose }) {
           <IconGrid />
           Rifas
         </Link>
+
+        {user?.rol === 'admin' && (
+          <Link
+            to="/resumen"
+            id="nav-resumen"
+            className={`sidebar-link ${isActive('/resumen') ? 'active' : ''}`}
+            onClick={handleNav}
+          >
+            <IconChart />
+            Resumen Global
+          </Link>
+        )}
 
         {(user?.rol === 'admin' || user?.permisos?.includes('crear_rifa')) && (
           <Link

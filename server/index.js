@@ -26,6 +26,8 @@ app.use('/api/auth', auth.router);
 app.use('/api/rifas', require('./routes/rifas'));
 app.use('/api/compras', require('./routes/compras'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/dashboard', require('./routes/dashboard'));
+
 
 // Socket.IO
 io.on('connection', (socket) => {
