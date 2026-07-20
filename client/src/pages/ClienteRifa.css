@@ -2,6 +2,75 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── IMAGE PREVIEW BUTTON ─────────────────────────── */
+.cliente-img-preview-btn {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 6px 14px 6px 6px;
+  cursor: pointer; transition: all 0.18s ease;
+  margin-bottom: 20px;
+  -webkit-tap-highlight-color: transparent;
+}
+.cliente-img-preview-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.25);
+  transform: scale(1.02);
+}
+.cliente-img-thumb {
+  width: 44px; height: 44px; border-radius: 8px;
+  object-fit: cover; display: block;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.cliente-img-preview-label {
+  font-size: 0.82rem; font-weight: 700;
+  color: rgba(255,255,255,0.75); font-family: 'Inter', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+/* ── LIGHTBOX ─────────────────────────────────────── */
+.cliente-lightbox {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.94);
+  backdrop-filter: blur(16px);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 24px;
+  animation: fadeInLb 0.2s ease;
+  cursor: pointer;
+}
+@keyframes fadeInLb { from { opacity:0 } to { opacity:1 } }
+
+.cliente-lightbox-close {
+  position: fixed; top: 20px; right: 20px;
+  width: 42px; height: 42px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 50%;
+  color: rgba(255,255,255,0.7);
+  font-size: 1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s ease;
+  z-index: 1001;
+}
+.cliente-lightbox-close:hover { background: rgba(255,255,255,0.16); color: #fff; transform: scale(1.1); }
+
+.cliente-lightbox-img {
+  max-width: 100%; max-height: 80vh;
+  object-fit: contain; border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.9);
+  cursor: default;
+  animation: zoomIn 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+@keyframes zoomIn { from { opacity:0; transform:scale(0.88) } to { opacity:1; transform:scale(1) } }
+
+.cliente-lightbox-caption {
+  margin-top: 16px;
+  font-size: 0.9rem; font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-align: center; font-family: 'Inter', sans-serif;
+}
+
 /* ── ROOT ─────────────────────────────────── */
 .cliente-root {
   min-height: 100vh;

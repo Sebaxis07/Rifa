@@ -24,6 +24,7 @@ export default function ClienteRifa() {
   const [submitting, setSubmitting] = useState(false);
   const [compraResult, setCompraResult] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
+  const [showImg, setShowImg] = useState(false);
   const confirmRef = useRef(null);
 
   useEffect(() => {
@@ -246,6 +247,22 @@ export default function ClienteRifa() {
           <h1 className="cliente-hero-title">{rifa.nombre}</h1>
           <p className="cliente-hero-prize">Premio: <strong>{rifa.nombrePremio}</strong></p>
 
+          {/* Miniatura + botón ver imagen */}
+          {rifa.imagenPremio && (
+            <button
+              className="cliente-img-preview-btn"
+              onClick={() => setShowImg(true)}
+              title="Ver imagen del premio"
+            >
+              <img
+                src={rifa.imagenPremio.startsWith('data:') ? rifa.imagenPremio : `${API}${rifa.imagenPremio}`}
+                alt={rifa.nombrePremio}
+                className="cliente-img-thumb"
+              />
+              <span className="cliente-img-preview-label">🔍 Ver imagen</span>
+            </button>
+          )}
+
           <div className="cliente-hero-stats">
             <div className="cliente-stat">
               <span className="cliente-stat-val">${rifa.precioPorNumero?.toLocaleString('es-CL')}</span>
@@ -459,6 +476,19 @@ export default function ClienteRifa() {
               Al confirmar, tus números quedan en estado <em>pendiente</em> hasta validar el pago.
             </p>
           </div>
+        </div>
+      )}
+      {/* Lightbox imagen del premio */}
+      {showImg && rifa.imagenPremio && (
+        <div className="cliente-lightbox" onClick={() => setShowImg(false)}>
+          <button className="cliente-lightbox-close" onClick={() => setShowImg(false)}>✕</button>
+          <img
+            src={rifa.imagenPremio.startsWith('data:') ? rifa.imagenPremio : `${API}${rifa.imagenPremio}`}
+            alt={rifa.nombrePremio}
+            className="cliente-lightbox-img"
+            onClick={e => e.stopPropagation()}
+          />
+          <p className="cliente-lightbox-caption">{rifa.nombrePremio}</p>
         </div>
       )}
     </div>
