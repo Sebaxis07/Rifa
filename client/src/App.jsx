@@ -13,6 +13,7 @@ import SupervisorView from './pages/SupervisorView';
 import UserManagement from './pages/UserManagement';
 import GlobalDashboard from './pages/GlobalDashboard';
 import Comprobante from './pages/Comprobante';
+import ClienteRifa from './pages/ClienteRifa';
 
 function ProtectedRoute({ children, permission }) {
   const { user, loading } = useAuth();
@@ -92,6 +93,7 @@ export default function App() {
         {/* Ruta pública fuera del layout con sidebar */}
         <Routes>
           <Route path="/comprobante/:id" element={<Comprobante />} />
+          <Route path="/rifa-activa" element={<ClienteRifa />} />
           <Route path="*" element={<AppLayout />} />
         </Routes>
       </AuthProvider>

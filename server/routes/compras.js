@@ -28,6 +28,49 @@ router.get('/:rifaId', async (req, res) => {
   }
 });
 
+// POST /api/compras/publico — público (clientes sin login)
+router.post('/publico', async (req, res) => {
+  try {
+    const { rifaId, comprador, numeros, nota } = req.body;
+
+    if (!rifaId || !comprador || !comprador.trim())
+      return res.status(400).json({ message: 'Faltan datos: rifaId o comprador' });
+
+    if (!numeros || numeros.length === 0)
+      return res.status(400).json({ message: 'Debes seleccionar al menos un número' });
+
+    const rifa = await Rifa.findById(rifaId);
+    if (!rifa) return res.status(404).json({ message: 'Rifa no encontrada' });
+    if (rifa.estado !== 'activa') return res.status(400).json({ message: 'La rifa ya no está activa' });
+
+    // Verificar conflictos
+    const existentes = await Compra.find({ rifaId });
+    const numerosOcupados = existentes.flatMap(c => c.numeros);
+    const conflicto = numeros.filter(n => numerosOcupados.includes(n));
+    if (conflicto.length > 0)
+      return res.status(400).json({ message: `Los números ${conflicto.join(', ')} ya están tomados. Selecciona otros.` });
+
+    const montoTotal = numeros.length * rifa.precioPorNumero;
+    const compra = new Compra({
+      rifaId,
+      comprador: comprador.trim(),
+      numeros,
+      montoTotal,
+      nota: nota || 'Reserva pública — pendiente de verificación',
+      transferido: false,
+    });
+    const saved = await compra.save();
+
+    // Notificar via socket al admin
+    const io = req.app.get('io');
+    if (io) io.to(rifaId.toString()).emit('compra_nueva', saved);
+
+    res.status(201).json(saved);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 // POST /api/compras — solo admin
 router.post('/', authMiddleware, permissionMiddleware('registrar_compra'), async (req, res) => {
   try {
