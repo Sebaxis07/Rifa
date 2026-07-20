@@ -19,7 +19,7 @@ function RifaCard({ rifa }) {
   return (
     <div className="rifa-card" id={`rifa-card-${rifa._id}`} onClick={() => navigate(`/rifa/${rifa._id}`)}>
       {rifa.imagenPremio
-        ? <img src={`${API}${rifa.imagenPremio}`} alt={rifa.nombrePremio} className="rifa-card-img" />
+        ? <img src={rifa.imagenPremio.startsWith('data:') ? rifa.imagenPremio : `${API}${rifa.imagenPremio}`} alt={rifa.nombrePremio} className="rifa-card-img" />
         : (
           <div className="rifa-card-img-placeholder">
             <svg viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1" style={{ width: 36, height: 36, opacity: 0.12 }}>

@@ -1,15 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
 const Rifa = require('../models/Rifa');
-const { authMiddleware, adminMiddleware, permissionMiddleware } = require('../middleware/auth');
+const { authMiddleware, permissionMiddleware } = require('../middleware/auth');
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, '../uploads')),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname.replace(/\s/g, '_'))
+// Usar memoria en vez de disco → compatible con Vercel
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+// Convierte el buffer a Base64 data URI
+function toBase64(file) {
+  if (!file) return '';
+  return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+}
 
 // GET /api/rifas — público
 router.get('/', async (req, res) => {
@@ -36,7 +41,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', authMiddleware, permissionMiddleware('crear_rifa'), upload.single('imagenPremio'), async (req, res) => {
   try {
     const { nombre, fechaInicio, fechaSorteo, precioPorNumero, nombrePremio } = req.body;
-    const imagenPremio = req.file ? `/uploads/${req.file.filename}` : '';
+    const imagenPremio = toBase64(req.file);
     const rifa = new Rifa({ nombre, fechaInicio, fechaSorteo, precioPorNumero, nombrePremio, imagenPremio });
     const saved = await rifa.save();
     res.status(201).json(saved);
@@ -49,7 +54,7 @@ router.post('/', authMiddleware, permissionMiddleware('crear_rifa'), upload.sing
 router.put('/:id', authMiddleware, permissionMiddleware('editar_rifa'), upload.single('imagenPremio'), async (req, res) => {
   try {
     const update = { ...req.body };
-    if (req.file) update.imagenPremio = `/uploads/${req.file.filename}`;
+    if (req.file) update.imagenPremio = toBase64(req.file);
     const rifa = await Rifa.findByIdAndUpdate(req.params.id, update, { new: true });
     res.json(rifa);
   } catch (err) {

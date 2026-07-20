@@ -281,7 +281,7 @@ export default function RifaDetail() {
         {/* Fondo imagen borrosa */}
         {rifa.imagenPremio && (
           <img
-            src={`${API}${rifa.imagenPremio}`}
+            src={rifa.imagenPremio.startsWith('data:') ? rifa.imagenPremio : `${API}${rifa.imagenPremio}`}
             alt=""
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -331,7 +331,7 @@ export default function RifaDetail() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 14 }}>
             {rifa.imagenPremio && (
               <img
-                src={`${API}${rifa.imagenPremio}`}
+                src={rifa.imagenPremio.startsWith('data:') ? rifa.imagenPremio : `${API}${rifa.imagenPremio}`}
                 alt={rifa.nombrePremio}
                 style={{ width: 110, height: 110, objectFit: 'cover', borderRadius: 14, border: '2px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
               />

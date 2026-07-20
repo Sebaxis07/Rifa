@@ -11,7 +11,9 @@ export default function EditRifaModal({ rifa, onClose, onSuccess }) {
   const [fechaSorteo, setFechaSorteo]           = useState(rifa.fechaSorteo ? rifa.fechaSorteo.substring(0, 10) : '');
   const [estado, setEstado]                     = useState(rifa.estado || 'activa');
   const [imageFile, setImageFile]               = useState(null);
-  const [previewUrl, setPreviewUrl]             = useState(rifa.imagenPremio ? `${API}${rifa.imagenPremio}` : '');
+  const [previewUrl, setPreviewUrl]             = useState(rifa.imagenPremio
+    ? (rifa.imagenPremio.startsWith('data:') ? rifa.imagenPremio : `${API}${rifa.imagenPremio}`)
+    : '');
   const [saving, setSaving]                     = useState(false);
 
   const handleImageChange = (e) => {

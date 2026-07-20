@@ -276,7 +276,7 @@ export default function SupervisorView() {
             </div>
           </div>
           {rifa.imagenPremio && (
-            <img src={`${API}${rifa.imagenPremio}`} alt={rifa.nombrePremio}
+            <img src={rifa.imagenPremio.startsWith('data:') ? rifa.imagenPremio : `${API}${rifa.imagenPremio}`} alt={rifa.nombrePremio}
               style={{ width: 110, height: 110, objectFit: 'cover', borderRadius: 14, border: '1px solid rgba(255,255,255,0.1)' }} />
           )}
         </div>

@@ -231,7 +231,7 @@ export default function ClienteRifa() {
         {rifa.imagenPremio ? (
           <div className="cliente-hero-img-wrap">
             <img
-              src={`${API}${rifa.imagenPremio}`}
+              src={rifa.imagenPremio.startsWith('data:') ? rifa.imagenPremio : `${API}${rifa.imagenPremio}`}
               alt={rifa.nombrePremio}
               className="cliente-hero-img"
             />
