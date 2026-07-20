@@ -223,6 +223,9 @@ export default function ClienteRifa() {
         <div className="cliente-header-badge">Vista pública</div>
       </header>
 
+      {/* Contenedor centrado */}
+      <div className="cliente-page-wrap">
+
       {/* Hero de la rifa */}
       <section className="cliente-hero">
         {rifa.imagenPremio ? (
@@ -308,6 +311,8 @@ export default function ClienteRifa() {
           })}
         </div>
       </section>
+
+      </div>{/* fin cliente-page-wrap */}
 
       {/* Barra flotante de selección */}
       {selected.length > 0 && step === 'seleccion' && (
